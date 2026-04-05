@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Camera Stream</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Raspberry Pi Camera Stream</h1>
+            <div class="status" id="status">
+                <span class="indicator"></span>
+                <span class="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="stream-container">
+                <img id="stream"
+                     src="{{ url_for('video_feed') }}"
+                     alt="Camera Stream"
+                     onerror="handleStreamError()"
+                     onload="handleStreamLoad()">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Loading stream...</p>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button onclick="reloadStream()" class="btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                        <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                    </svg>
+                    Reload Stream
+                </button>
+            </div>
+
+            <div class="info">
+                <div class="info-item">
+                    <span class="label">Resolution:</span>
+                    <span class="value">{{ stream_config.resolution[0] }} × {{ stream_config.resolution[1] }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Framerate:</span>
+                    <span class="value">{{ stream_config.framerate }} fps</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Quality:</span>
+                    <span class="value">{{ stream_config.quality }}%</span>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Raspberry Pi Camera Streaming Server</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/stream.js') }}"></script>
+</body>
+</html>
