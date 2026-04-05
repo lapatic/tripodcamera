@@ -1,0 +1,23 @@
+[Unit]
+Description=Raspberry Pi Camera Streaming Service
+After=network.target
+
+[Service]
+Type=simple
+User=meta
+WorkingDirectory=/home/meta/camera-stream
+Environment="PATH=/home/meta/camera-stream/venv/bin"
+ExecStart=/home/meta/camera-stream/venv/bin/python /home/meta/camera-stream/app.py
+Restart=always
+RestartSec=10
+
+# Resource limits
+CPUQuota=50%
+MemoryLimit=512M
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
