@@ -154,20 +154,23 @@ class TestBaseCamera:
 
     def test_camera_restarts_after_stop(self):
         """Test that camera can restart after stopping."""
+        from camera.base_camera import BaseCamera
+
         # First camera instance
         camera1 = MockCamera()
         frame1 = camera1.get_frame()
         assert frame1 is not None
 
         # Reset class variables to simulate stopped camera
-        MockCamera.thread = None
-        MockCamera.frame = None
+        # Must reset on BaseCamera, not MockCamera, since that's what __init__ checks
+        BaseCamera.thread = None
+        BaseCamera.frame = None
 
         # Second camera instance should restart thread
         camera2 = MockCamera()
         frame2 = camera2.get_frame()
         assert frame2 is not None
-        assert MockCamera.thread is not None
+        assert BaseCamera.thread is not None
 
 
 class TestFrameGeneration:
