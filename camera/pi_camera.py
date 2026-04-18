@@ -138,7 +138,7 @@ class PiCamera(BaseCamera):
 
             print(f'MJPEG encoder bitrate: {bitrate / 1_000_000:.1f} Mbps '
                   f'(Resolution: {resolution[0]}x{resolution[1]}, Quality: {quality}, '
-                  f'Framerate: {framerate} fps)')
+                  f'Framerate: {framerate} fps)', flush=True)
         else:
             bitrate = None  # Use encoder default
 
