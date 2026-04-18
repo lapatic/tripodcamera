@@ -116,13 +116,27 @@ main {
     display: block;
     max-width: 100%;
     object-fit: contain;
+    transition: transform 0.3s ease;
 }
 
-/* Fullscreen button */
-.btn-fullscreen {
+/* Rotated stream handling */
+.stream-container.rotated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stream-container.rotated img {
+    width: auto;
+    height: 100%;
+    max-height: 80vh;
+}
+
+/* Overlay buttons (fullscreen and rotate) */
+.btn-fullscreen,
+.btn-rotate {
     position: absolute;
     bottom: 20px;
-    right: 20px;
     background: rgba(42, 42, 42, 0.9);
     color: #fff;
     border: 1px solid #444;
@@ -137,13 +151,23 @@ main {
     backdrop-filter: blur(10px);
 }
 
-.btn-fullscreen:hover {
+.btn-rotate {
+    right: 70px;
+}
+
+.btn-fullscreen {
+    right: 20px;
+}
+
+.btn-fullscreen:hover,
+.btn-rotate:hover {
     background: rgba(51, 51, 51, 0.95);
     border-color: #555;
     transform: scale(1.05);
 }
 
-.btn-fullscreen:active {
+.btn-fullscreen:active,
+.btn-rotate:active {
     transform: scale(0.95);
 }
 
@@ -344,8 +368,9 @@ footer {
         justify-content: center;
     }
 
-    /* Hide overlay fullscreen button on mobile, show button in controls */
-    .btn-fullscreen {
+    /* Hide overlay buttons on mobile, show buttons in controls */
+    .btn-fullscreen,
+    .btn-rotate {
         display: none;
     }
 
@@ -461,10 +486,18 @@ body.mobile-fullscreen .stream-container img {
     object-fit: contain;
 }
 
-body.mobile-fullscreen .btn-fullscreen {
+body.mobile-fullscreen .btn-fullscreen,
+body.mobile-fullscreen .btn-rotate {
     display: flex;
     background: rgba(42, 42, 42, 0.8);
     bottom: 20px;
+}
+
+body.mobile-fullscreen .btn-rotate {
+    right: 70px;
+}
+
+body.mobile-fullscreen .btn-fullscreen {
     right: 20px;
 }
 

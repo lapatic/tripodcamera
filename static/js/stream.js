@@ -5,6 +5,7 @@
 let streamLoadTime = null;
 let isStreamLoaded = false;
 let isMobileFullscreen = false;
+let rotationDegrees = 0;
 
 /**
  * Detect if the device is iOS
@@ -172,6 +173,27 @@ function toggleMobileFullscreen() {
 }
 
 /**
+ * Toggle rotation of the stream (90 degree increments)
+ */
+function toggleRotation() {
+    rotationDegrees = (rotationDegrees + 90) % 360;
+    const img = document.getElementById('stream');
+    const container = document.getElementById('streamContainer');
+
+    // Apply rotation transform
+    img.style.transform = `rotate(${rotationDegrees}deg)`;
+
+    // Swap width/height when rotated 90 or 270 degrees
+    if (rotationDegrees === 90 || rotationDegrees === 270) {
+        container.classList.add('rotated');
+    } else {
+        container.classList.remove('rotated');
+    }
+
+    console.log(`Rotated to ${rotationDegrees} degrees`);
+}
+
+/**
  * Initialize the stream interface
  */
 function init() {
@@ -183,6 +205,10 @@ function init() {
         // Press 'R' to reload stream
         if (e.key === 'r' || e.key === 'R') {
             reloadStream();
+        }
+        // Press 'T' to rotate stream
+        if (e.key === 't' || e.key === 'T') {
+            toggleRotation();
         }
         // Press 'F' to toggle fullscreen
         if (e.key === 'f' || e.key === 'F') {
