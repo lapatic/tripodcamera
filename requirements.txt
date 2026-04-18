@@ -1,5 +1,4 @@
-Flask==3.0.0
-picamera2==0.3.17
-simplejpeg==1.7.4
-numpy==1.24.3
-Pillow==10.2.0
+# Python dependencies for camera streaming server
+# Note: picamera2 should be installed from system packages (see deploy/setup_pi.sh)
+
+Flask>=3.0.0

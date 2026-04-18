@@ -30,7 +30,7 @@ echo ""
 
 # Install system dependencies
 echo "[2/7] Installing system dependencies..."
-sudo apt install -y python3-pip python3-venv git python3-libcamera python3-kms++
+sudo apt install -y python3-pip python3-venv git python3-libcamera python3-kms++ python3-picamera2
 echo ""
 
 # Enable camera interface (if not already enabled)
@@ -51,14 +51,21 @@ echo "[4/7] Using project directory: $PROJECT_DIR"
 # Create virtual environment
 echo "[5/7] Creating Python virtual environment..."
 cd "$PROJECT_DIR"
-python3 -m venv venv
+# Use --system-site-packages to access picamera2 from system
+python3 -m venv --system-site-packages venv
 echo ""
 
 # Install Python dependencies
 echo "[6/7] Installing Python packages..."
 source venv/bin/activate
-pip install --upgrade pip
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
+echo ""
+
+# Verify picamera2 is accessible
+echo "Verifying picamera2 installation..."
+python3 -c "from picamera2 import Picamera2; print('✓ picamera2 is available')" || \
+    echo "⚠ Warning: picamera2 not found. Install with: sudo apt install python3-picamera2"
 echo ""
 
 # Create systemd service
