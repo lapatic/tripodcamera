@@ -91,7 +91,7 @@ RestartSec=10
 
 # Resource limits
 CPUQuota=50%
-MemoryLimit=512M
+MemoryMax=512M
 
 # Logging
 StandardOutput=journal

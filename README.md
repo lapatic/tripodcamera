@@ -4,9 +4,11 @@ A low-latency camera streaming server for Raspberry Pi that broadcasts video to 
 
 ## Features
 
+- **High Quality**: 1080p at 20 Mbps with quality 95 (configurable)
 - **Low Latency**: 100-300ms typical latency for real-time viewing
 - **Multiple Viewers**: Supports 2-5 simultaneous viewers efficiently
-- **Web Interface**: Clean, responsive HTML5 interface with dark theme
+- **Responsive Web Interface**: Mobile-friendly with fullscreen support
+- **Rotation Support**: Software rotation for phones with rotation lock
 - **Hardware Accelerated**: Uses MJPEGEncoder for optimal performance
 - **Auto-start**: Systemd service for automatic startup on boot
 - **Thread-safe**: Multi-client synchronization without blocking
@@ -15,90 +17,181 @@ A low-latency camera streaming server for Raspberry Pi that broadcasts video to 
 ## Requirements
 
 ### Hardware
-- Raspberry Pi (any model with camera support)
-- Raspberry Pi Camera Module (v1, v2, v3, or HQ)
-- Network connection (Ethernet recommended for best performance)
+- **Raspberry Pi**: Pi 4, Pi 3, Pi Zero W/2W (Pi 4 recommended for 1080p)
+- **Camera**: Official Pi Camera (v1/v2/v3/HQ) or Arducam OV5647
+- **Network**: Ethernet recommended for best performance (WiFi works)
 
 ### Software
 - Raspberry Pi OS (Bullseye or later)
 - Python 3.7+
-- picamera2 library
+- picamera2 library (installed via apt)
 - Flask web framework
 
 ## Quick Start
 
-### On Raspberry Pi
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url> ~/camera-stream
-   cd ~/camera-stream
-   ```
-
-2. **Run the setup script**
-   ```bash
-   bash deploy/setup_pi.sh
-   ```
-
-3. **Start the service**
-   ```bash
-   sudo systemctl start camera-stream
-   ```
-
-4. **Access the stream**
-   - Open a browser and navigate to: `http://192.168.86.32:5000`
-   - Replace with your Pi's IP address
-
-### For Development
-
-If you want to run the server manually for testing:
+### 1. Clone the Repository
 
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python app.py
+git clone https://github.com/lapatic/tripodcamera.git ~/tripodcamera
+cd ~/tripodcamera
 ```
+
+### 2. Camera Setup (IMPORTANT - READ FIRST!)
+
+**If using Official Raspberry Pi Camera:**
+- Camera should auto-detect
+- Skip to step 3
+
+**If using Arducam OV5647 or similar third-party camera:**
+
+Arducam cameras require manual configuration. Without this, the camera will appear broken.
+
+```bash
+# Backup config
+sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.backup
+
+# Edit config
+sudo nano /boot/firmware/config.txt
+
+# Comment out this line (add # at the start):
+# camera_auto_detect=1
+
+# Add at the end of the file:
+dtparam=i2c_arm=on
+dtoverlay=ov5647
+
+# Save and exit (Ctrl+O, Enter, Ctrl+X)
+```
+
+Install tools and reboot:
+```bash
+sudo apt-get update
+sudo apt-get install -y libcamera-apps i2c-tools
+sudo modprobe i2c-dev
+echo "i2c-dev" | sudo tee -a /etc/modules
+sudo reboot
+```
+
+After reboot, verify camera is detected:
+```bash
+# Check I2C bus (should show "UU" at 0x36)
+sudo i2cdetect -y 10
+
+# List cameras (should show ov5647)
+rpicam-hello --list-cameras
+```
+
+See [Camera Setup Guide](keen-stirring-gosling.md) for detailed troubleshooting.
+
+### 3. Run the Setup Script
+
+```bash
+bash deploy/setup_pi.sh
+```
+
+This will:
+- Install system dependencies (picamera2, Python packages)
+- Create Python virtual environment
+- Install Flask and requirements
+- Create systemd service for auto-start
+
+### 4. Start the Service
+
+```bash
+sudo systemctl start camera-stream
+```
+
+### 5. Access the Stream
+
+Open a browser and navigate to: `http://<your-pi-ip>:5000`
+
+Find your Pi's IP:
+```bash
+hostname -I
+```
+
+## Pi Zero W Compatibility
+
+The Pi Zero W works but with reduced performance:
+
+**Recommended Settings for Pi Zero W:**
+```python
+# In config.py or environment variables
+CAMERA_RESOLUTION=640,480    # VGA instead of 1080p
+CAMERA_FRAMERATE=15          # 15 fps instead of 24
+CAMERA_QUALITY=75            # Lower quality to reduce CPU load
+```
+
+**Performance Expectations:**
+- Resolution: 640×480 max (VGA)
+- Framerate: 10-15 fps
+- Viewers: 1-2 concurrent
+- CPU Usage: 40-60%
+
+**Why Pi Zero is slower:**
+- Single-core 1GHz CPU vs Pi 4's quad-core 1.5GHz
+- 512MB RAM vs 1-4GB on Pi 4
+- Slower WiFi (2.4GHz only)
+
+For best results, use **Ethernet via USB adapter** on Pi Zero W.
 
 ## Configuration
 
-Configuration is managed through `config.py` or environment variables.
-
-### Default Settings
+Current default settings (optimized for Pi 4):
 
 ```python
 PORT = 5000                    # Web server port
-RESOLUTION = (1280, 720)       # 720p
-FRAMERATE = 30                 # 30 fps
-QUALITY = 85                   # JPEG quality (0-100)
+RESOLUTION = (1920, 1080)      # 1080p (Full HD)
+FRAMERATE = 24                 # 24 fps
+QUALITY = 95                   # High quality JPEG (0-100)
 FRAME_TIMEOUT = 10             # Seconds before stopping camera thread
 ```
 
 ### Environment Variables
 
-You can override settings using environment variables:
+Override settings without editing code:
 
 ```bash
 export CAMERA_PORT=8080
 export CAMERA_RESOLUTION=1920,1080
 export CAMERA_FRAMERATE=24
-export CAMERA_QUALITY=90
+export CAMERA_QUALITY=95
 ```
 
-### Performance Tuning
+Or edit systemd service:
+```bash
+sudo systemctl edit camera-stream
+```
 
-Choose settings based on your needs:
+Add:
+```ini
+[Service]
+Environment="CAMERA_RESOLUTION=1280,720"
+Environment="CAMERA_FRAMERATE=30"
+Environment="CAMERA_QUALITY=85"
+```
 
-| Profile | Resolution | FPS | Quality | Latency | Bandwidth/viewer |
-|---------|------------|-----|---------|---------|------------------|
-| **Low Latency** | 640×480 | 30 | 75 | ~100ms | ~1.5 Mbps |
-| **Balanced** (recommended) | 1280×720 | 30 | 85 | ~150ms | ~3.5 Mbps |
-| **High Quality** | 1920×1080 | 24 | 90 | ~250ms | ~6 Mbps |
+### Performance Profiles
+
+| Profile | Resolution | FPS | Quality | Pi Model | Bandwidth/viewer |
+|---------|------------|-----|---------|----------|------------------|
+| **Pi Zero W** | 640×480 | 15 | 75 | Zero/Zero W | ~1.5 Mbps |
+| **Balanced** | 1280×720 | 30 | 85 | Pi 3/4 | ~5 Mbps |
+| **High Quality** | 1920×1080 | 24 | 95 | Pi 4 only | ~15-20 Mbps |
+
+## Web Interface Features
+
+### Desktop
+- **Fullscreen button** (F key) - Browser native fullscreen
+- **Rotate button** (T key) - Rotate stream 90° increments
+- **Reload button** (R key) - Reconnect stream
+
+### Mobile/iOS
+- **Fullscreen mode** - Works on Chrome (better) and Safari
+- **Rotation button** - Software rotation (works with rotation lock)
+- **Touch-optimized** - Large buttons, responsive layout
+
+**iOS Note:** Use Chrome for true fullscreen. Safari has limited fullscreen support.
 
 ## Project Structure
 
@@ -109,14 +202,16 @@ tripodcamera/
 ├── requirements.txt           # Python dependencies
 ├── camera/
 │   ├── base_camera.py        # Thread-safe frame distribution
-│   └── pi_camera.py          # Picamera2 implementation
+│   └── pi_camera.py          # Picamera2 implementation with MJPEG
 ├── static/
-│   ├── css/style.css         # Styling
-│   └── js/stream.js          # Client-side JavaScript
+│   ├── css/style.css         # Responsive styling with dark theme
+│   └── js/stream.js          # Client-side controls and fullscreen
 ├── templates/
 │   └── index.html            # Web interface
-├── tests/                     # Test suite
-└── deploy/                    # Deployment scripts
+├── tests/                     # Test suite (pytest)
+├── deploy/
+│   └── setup_pi.sh           # Automated setup script
+└── keen-stirring-gosling.md  # Detailed camera setup guide
 ```
 
 ## Service Management
@@ -130,20 +225,23 @@ sudo systemctl start camera-stream
 # Stop the service
 sudo systemctl stop camera-stream
 
-# Restart the service
+# Restart the service (after config changes)
 sudo systemctl restart camera-stream
 
 # Check status
 sudo systemctl status camera-stream
 
-# Enable auto-start on boot
+# Enable auto-start on boot (default)
 sudo systemctl enable camera-stream
 
 # Disable auto-start
 sudo systemctl disable camera-stream
 
-# View logs
+# View live logs
 sudo journalctl -u camera-stream -f
+
+# View logs since boot
+sudo journalctl -u camera-stream -b
 ```
 
 ## Development
@@ -151,114 +249,161 @@ sudo journalctl -u camera-stream -f
 ### Running Tests
 
 ```bash
-# Install dev dependencies
-pip install -r requirements-dev.txt
+# Activate virtual environment
+source venv/bin/activate
 
-# Run tests
+# Install dev dependencies
+pip install pytest
+
+# Run all tests
 pytest tests/ -v
 
-# Run specific test file
+# Run specific test
 pytest tests/test_camera.py -v
 ```
 
-### Code Quality
+### Manual Testing
 
 ```bash
-# Format code with black
-black .
+# Run without systemd
+source venv/bin/activate
+python app.py
 
-# Check code style with flake8
-flake8 camera/ app.py
+# Access at http://localhost:5000
 ```
 
 ## Deployment Workflow
 
 1. **Develop locally** - Make changes on your development machine
 2. **Test** - Run tests and verify functionality
-3. **Commit** - Commit changes with descriptive messages
-4. **Push to GitHub** - `git push origin main`
-5. **Update Pi** - SSH to Pi and pull changes
+3. **Commit & Push**
    ```bash
-   ssh meta@192.168.86.32
-   cd ~/camera-stream
+   git add .
+   git commit -m "Description of changes"
+   git push origin main
+   ```
+4. **Update Pi** - SSH to Pi and pull changes
+   ```bash
+   ssh user@pi-ip-address
+   cd ~/tripodcamera
    git pull
    sudo systemctl restart camera-stream
    ```
-6. **Verify** - Check that the stream works at http://192.168.86.32:5000
+5. **Verify** - Check stream at http://pi-ip:5000
 
 ## Troubleshooting
 
 ### Camera Not Detected
 
+**For Arducam cameras:**
 ```bash
-# Check if camera is connected
-libcamera-hello --list-cameras
+# Verify I2C detection
+sudo i2cdetect -y 10
+# Should show "UU" at address 0x36
 
-# Enable camera interface
-sudo raspi-config
-# Navigate to: Interface Options -> Camera -> Enable
+# Check camera list
+rpicam-hello --list-cameras
+# Should show: "0 : ov5647 [2592x1944 10-bit GBRG]"
 
-# Reboot
-sudo reboot
+# If not detected, verify config.txt:
+sudo nano /boot/firmware/config.txt
+# Must have: dtparam=i2c_arm=on and dtoverlay=ov5647
+# Must NOT have: camera_auto_detect=1 (comment it out)
 ```
 
-### High Latency (>500ms)
+**For official Pi cameras:**
+```bash
+# Enable camera in raspi-config
+sudo raspi-config
+# Interface Options -> Legacy Camera -> Disable (use libcamera)
+# Finish and reboot
 
-- Reduce resolution to 640×480
-- Lower JPEG quality to 70
-- Use Ethernet instead of WiFi
-- Check network bandwidth: `iftop -i eth0`
+# Verify
+libcamera-hello --list-cameras
+```
 
-### High CPU Usage (>80%)
+### Stream Not Accessible
 
-- Verify using MJPEGEncoder (check logs)
-- Reduce framerate to 24 fps
-- Lower resolution
-- Check for other processes: `htop`
+```bash
+# Check service status
+sudo systemctl status camera-stream
 
-### Stream Freezes
+# View errors in logs
+sudo journalctl -u camera-stream -n 50
 
-- Check `FRAME_TIMEOUT` in config.py
-- Verify camera thread restarts correctly
-- Review logs: `sudo journalctl -u camera-stream -f`
+# Check if port 5000 is listening
+sudo netstat -tlnp | grep 5000
 
-### Multiple Viewers Cause Frame Drops
+# Test from Pi itself
+curl http://localhost:5000
+```
 
-- Ensure Flask threaded mode is enabled (default)
-- Check network upload bandwidth
-- Reduce resolution or quality
+### High CPU Usage
+
+- **Pi 4**: CPU should be <30% with 1080p@24fps
+- **Pi 3**: Use 720p, expect 40-50% CPU
+- **Pi Zero W**: Use 640×480, expect 50-70% CPU
+
+If CPU is higher:
+```bash
+# Check bitrate in logs
+sudo journalctl -u camera-stream | grep bitrate
+
+# Reduce quality/resolution in config.py
+# Then restart service
+```
+
+### Low Quality / Blocky Image
+
+```bash
+# Check current bitrate
+sudo journalctl -u camera-stream | grep "MJPEG encoder bitrate"
+# Should show: "20.0 Mbps" for 1080p
+
+# If lower than expected, check config.py quality setting
+# Quality 95 = ~20 Mbps at 1080p
+# Quality 85 = ~10-12 Mbps at 1080p
+```
+
+### SSH Disconnections
+
+```bash
+# Disable WiFi power saving
+sudo iw wlan0 set power_save off
+
+# Make permanent:
+sudo nano /etc/rc.local
+# Add before "exit 0":
+/sbin/iw wlan0 set power_save off
+
+# Check SSH settings
+sudo nano /etc/ssh/sshd_config
+# Should have:
+# ClientAliveInterval 30
+# ClientAliveCountMax 3
+```
 
 ## Performance Monitoring
-
-### Expected Performance Metrics
-
-| Metric | Target | Acceptable | Poor |
-|--------|--------|------------|------|
-| Latency | <200ms | 200-400ms | >400ms |
-| CPU Usage | <30% | 30-50% | >50% |
-| Frame Rate | 30 fps | 24-30 fps | <24 fps |
-| Memory | <200MB | 200-300MB | >300MB |
-
-### Monitoring Commands
 
 ```bash
 # CPU and memory usage
 htop
 
 # Network bandwidth
-iftop -i eth0
+sudo apt install iftop
+sudo iftop -i wlan0
 
-# Service status and resource usage
+# Service resource usage
 systemctl status camera-stream
 
-# Real-time logs
-sudo journalctl -u camera-stream -f
+# Check camera logs
+sudo journalctl -u camera-stream --since "5 minutes ago"
 ```
 
 ## API Endpoints
 
 ### Web Interface
-- `GET /` - Main streaming page
+- `GET /` - Main streaming page with controls
 
 ### Video Feed
 - `GET /video_feed` - MJPEG stream (multipart/x-mixed-replace)
@@ -270,9 +415,9 @@ sudo journalctl -u camera-stream -f
     "status": "healthy",
     "camera_available": true,
     "config": {
-      "resolution": [1280, 720],
-      "framerate": 30,
-      "quality": 85
+      "resolution": [1920, 1080],
+      "framerate": 24,
+      "quality": 95
     }
   }
   ```
@@ -281,39 +426,35 @@ sudo journalctl -u camera-stream -f
 
 The streaming architecture uses a proven multi-threaded pattern:
 
-1. **Background Thread** - Continuously captures frames from camera
-2. **Frame Buffer** - Thread-safe storage for latest frame
-3. **Client Threads** - Each viewer gets independent access via Flask threads
-4. **CameraEvent** - Per-client synchronization prevents blocking
+1. **Background Thread** - Continuously captures frames from camera using picamera2
+2. **MJPEG Encoder** - Hardware-accelerated encoding at configured bitrate
+3. **Frame Buffer** - Thread-safe storage for latest frame
+4. **Client Threads** - Each viewer gets independent access via Flask threads
+5. **CameraEvent** - Per-client synchronization prevents blocking
+
+**Bitrate Calculation:**
+- Base: 8 Mbps for 720p@85 quality
+- Scales with resolution and quality
+- 1080p@95 quality → 20 Mbps (Pi 4 limit)
+- Lower framerate = higher quality per frame (no penalty)
 
 This design ensures:
 - Multiple viewers don't interfere with each other
 - Slow clients don't block fast clients
 - Camera runs continuously without restart overhead
 - Efficient resource usage
+- Hardware acceleration when available
 
 ## Security Considerations
 
 This is a basic implementation without authentication. For production use, consider:
 
-- Adding basic authentication (HTTP Basic Auth)
 - Using HTTPS with SSL/TLS certificates
+- Adding basic authentication (HTTP Basic Auth)
 - Implementing rate limiting
-- Restricting access by IP address
+- Restricting access by IP address or VPN
 - Using a reverse proxy (nginx) with security headers
-
-## Future Enhancements
-
-Potential improvements:
-
-- [ ] Basic authentication for viewer access
-- [ ] Video recording to file
-- [ ] Motion detection with alerts
-- [ ] Support for multiple cameras
-- [ ] WebRTC for ultra-low latency
-- [ ] Mobile app integration
-- [ ] Analytics dashboard
-- [ ] RESTful API for programmatic access
+- Running on non-standard port
 
 ## License
 
@@ -327,20 +468,12 @@ MIT License - see LICENSE file for details
 
 ## Support
 
-For issues, questions, or contributions:
+For issues or questions:
+- Check the [Troubleshooting](#troubleshooting) section
+- Review the [Camera Setup Guide](keen-stirring-gosling.md)
+- Check logs: `sudo journalctl -u camera-stream -f`
 - Open an issue on GitHub
-- Check the troubleshooting section
-- Review the deployment logs: `sudo journalctl -u camera-stream -f`
-
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
 
 ---
 
-**Raspberry Pi Camera Streaming Server** - Low latency camera streaming for Raspberry Pi
+**Raspberry Pi Camera Streaming Server** - High quality, low latency camera streaming for Raspberry Pi
