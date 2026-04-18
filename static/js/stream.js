@@ -4,6 +4,24 @@
 
 let streamLoadTime = null;
 let isStreamLoaded = false;
+let isMobileFullscreen = false;
+
+/**
+ * Detect if the device is iOS
+ */
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+/**
+ * Detect if fullscreen API is available
+ */
+function supportsFullscreen() {
+    return !!(document.fullscreenEnabled ||
+              document.webkitFullscreenEnabled ||
+              document.mozFullScreenEnabled ||
+              document.msFullscreenEnabled);
+}
 
 /**
  * Handle successful stream load
@@ -79,9 +97,16 @@ function hideLoading() {
 }
 
 /**
- * Toggle fullscreen mode
+ * Toggle fullscreen mode (iOS-compatible)
  */
 function toggleFullscreen() {
+    // Use mobile fullscreen mode for iOS or when Fullscreen API is not supported
+    if (isIOS() || !supportsFullscreen()) {
+        toggleMobileFullscreen();
+        return;
+    }
+
+    // Use standard Fullscreen API for other devices
     const container = document.getElementById('streamContainer');
 
     if (!document.fullscreenElement &&
@@ -114,6 +139,39 @@ function toggleFullscreen() {
 }
 
 /**
+ * Toggle mobile fullscreen mode (for iOS and devices without Fullscreen API)
+ */
+function toggleMobileFullscreen() {
+    if (!isMobileFullscreen) {
+        // Enter mobile fullscreen
+        document.body.classList.add('mobile-fullscreen');
+        isMobileFullscreen = true;
+        console.log('Entering mobile fullscreen mode');
+
+        // Scroll to top to hide browser chrome on mobile
+        window.scrollTo(0, 0);
+
+        // Lock scroll position
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+
+    } else {
+        // Exit mobile fullscreen
+        document.body.classList.remove('mobile-fullscreen');
+        isMobileFullscreen = false;
+        console.log('Exiting mobile fullscreen mode');
+
+        // Unlock scroll
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
+    }
+}
+
+/**
  * Initialize the stream interface
  */
 function init() {
@@ -130,9 +188,13 @@ function init() {
         if (e.key === 'f' || e.key === 'F') {
             toggleFullscreen();
         }
-        // ESC also exits fullscreen (handled by browser, but log it)
-        if (e.key === 'Escape' && document.fullscreenElement) {
-            console.log('Exiting fullscreen via ESC');
+        // ESC exits both types of fullscreen
+        if (e.key === 'Escape') {
+            if (isMobileFullscreen) {
+                toggleMobileFullscreen();
+            } else if (document.fullscreenElement) {
+                console.log('Exiting fullscreen via ESC');
+            }
         }
     });
 

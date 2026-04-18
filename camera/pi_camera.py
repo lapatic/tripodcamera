@@ -103,24 +103,42 @@ class PiCamera(BaseCamera):
 
         # Create MJPEG encoder
         # Note: Newer picamera2 versions (0.3.34+) use bitrate instead of quality (q)
-        # If quality is configured, estimate bitrate; otherwise use default
+        # For MJPEG, bitrate determines per-frame quality
         quality = config.STREAM_CONFIG.get('quality', 85)
 
         if quality:
-            # Rough bitrate estimation for MJPEG:
-            # 720p @ quality 85 ≈ 5 Mbps, 1080p @ quality 85 ≈ 8 Mbps
-            # Scale based on pixels and quality
+            # MJPEG bitrate calculation for high quality
+            # Higher resolution and quality need more bits per frame
             resolution = config.STREAM_CONFIG['resolution']
             pixels = resolution[0] * resolution[1]
             framerate = config.STREAM_CONFIG['framerate']
 
-            # Base: 5 Mbps for 720p (921,600 px) at quality 85
-            reference_pixels = 1280 * 720
+            # More aggressive bitrate for better quality:
+            # - Base: 8 Mbps for 720p at quality 85 (was too low at 5 Mbps)
+            # - Scale up with resolution and quality
+            # - DON'T reduce for lower framerate (fewer frames = higher quality per frame)
+            reference_pixels = 1280 * 720  # 720p
             reference_quality = 85
-            reference_bitrate = 5_000_000
+            reference_bitrate = 8_000_000  # 8 Mbps base (increased from 5)
 
-            bitrate = int(reference_bitrate * (pixels / reference_pixels) *
-                         (quality / reference_quality) * (framerate / 30))
+            # Calculate without framerate penalty
+            pixel_scale = pixels / reference_pixels
+            quality_scale = quality / reference_quality
+
+            # For very high quality (95+), boost even more
+            if quality >= 95:
+                quality_scale *= 1.25  # 25% boost for quality 95+
+
+            bitrate = int(reference_bitrate * pixel_scale * quality_scale)
+
+            # Ensure good bitrate range for 1080p
+            if pixels >= 1920 * 1080:
+                bitrate = max(bitrate, 15_000_000)  # Minimum 15 Mbps
+                bitrate = min(bitrate, 20_000_000)  # Maximum 20 Mbps (Pi4 limit)
+
+            print(f'MJPEG encoder bitrate: {bitrate / 1_000_000:.1f} Mbps '
+                  f'(Resolution: {resolution[0]}x{resolution[1]}, Quality: {quality}, '
+                  f'Framerate: {framerate} fps)')
         else:
             bitrate = None  # Use encoder default
 
