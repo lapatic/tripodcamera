@@ -6,10 +6,11 @@ PORT = int(os.environ.get('CAMERA_PORT', 5000))
 DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
 
 # Camera Configuration
+# Higher quality settings: 1080p @ 24fps, quality 95 for better image quality
 STREAM_CONFIG = {
-    'resolution': tuple(map(int, os.environ.get('CAMERA_RESOLUTION', '1280,720').split(','))),
-    'framerate': int(os.environ.get('CAMERA_FRAMERATE', 30)),
-    'quality': int(os.environ.get('CAMERA_QUALITY', 85)),
+    'resolution': tuple(map(int, os.environ.get('CAMERA_RESOLUTION', '1920,1080').split(','))),
+    'framerate': int(os.environ.get('CAMERA_FRAMERATE', 24)),
+    'quality': int(os.environ.get('CAMERA_QUALITY', 95)),
 }
 
 # Thread Configuration

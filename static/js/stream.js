@@ -79,6 +79,41 @@ function hideLoading() {
 }
 
 /**
+ * Toggle fullscreen mode
+ */
+function toggleFullscreen() {
+    const container = document.getElementById('streamContainer');
+
+    if (!document.fullscreenElement &&
+        !document.webkitFullscreenElement &&
+        !document.mozFullScreenElement) {
+        // Enter fullscreen
+        if (container.requestFullscreen) {
+            container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+            container.webkitRequestFullscreen();
+        } else if (container.mozRequestFullScreen) {
+            container.mozRequestFullScreen();
+        } else if (container.msRequestFullscreen) {
+            container.msRequestFullscreen();
+        }
+        console.log('Entering fullscreen mode');
+    } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+        console.log('Exiting fullscreen mode');
+    }
+}
+
+/**
  * Initialize the stream interface
  */
 function init() {
@@ -91,7 +126,21 @@ function init() {
         if (e.key === 'r' || e.key === 'R') {
             reloadStream();
         }
+        // Press 'F' to toggle fullscreen
+        if (e.key === 'f' || e.key === 'F') {
+            toggleFullscreen();
+        }
+        // ESC also exits fullscreen (handled by browser, but log it)
+        if (e.key === 'Escape' && document.fullscreenElement) {
+            console.log('Exiting fullscreen via ESC');
+        }
     });
+
+    // Monitor fullscreen changes
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
     // Monitor stream health
     setInterval(() => {
@@ -100,6 +149,18 @@ function init() {
             console.log(`Stream uptime: ${uptime}s`);
         }
     }, 30000); // Log every 30 seconds
+}
+
+/**
+ * Handle fullscreen state changes
+ */
+function handleFullscreenChange() {
+    const isFullscreen = !!(document.fullscreenElement ||
+                            document.webkitFullscreenElement ||
+                            document.mozFullScreenElement ||
+                            document.msFullscreenElement);
+
+    console.log(`Fullscreen mode: ${isFullscreen ? 'ON' : 'OFF'}`);
 }
 
 // Initialize when DOM is ready
