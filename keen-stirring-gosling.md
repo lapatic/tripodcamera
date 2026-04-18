@@ -368,22 +368,331 @@ sudo journalctl -u camera-stream -f  # View logs
 
 ## Testing Strategy
 
+### Testing the Camera (Step-by-Step Guide)
+
+This guide explains how to test your camera setup using the built-in test suite and the Flask application.
+
+#### 1. Quick Camera Hardware Test (On Pi)
+
+**Before running any Python code, verify the camera is working:**
+
+```bash
+# SSH to your Pi
+ssh meta@192.168.86.31
+
+# Quick test - list cameras
+rpicam-hello --list-cameras
+# Expected output: "0 : ov5647 [2592x1944 10-bit GBRG]"
+
+# Take a test photo to verify camera works
+rpicam-still -o /tmp/camera-test.jpg -t 2000 --width 1920 --height 1080
+ls -lh /tmp/camera-test.jpg
+# Should show a ~300KB JPEG file
+
+# Optional: Download the photo to verify quality
+# On your local machine:
+scp meta@192.168.86.31:/tmp/camera-test.jpg ~/Desktop/
+```
+
+**If this fails**, the camera hardware is not properly configured. See "Camera Hardware Setup" section.
+
+#### 2. Unit Tests (Local or Pi)
+
+**Test the camera abstraction without hardware:**
+
+```bash
+# On Pi or local machine
+cd ~/code/tripodcamera  # or wherever you cloned the repo
+
+# Install test dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests with verbose output
+pytest tests/ -v
+
+# Run specific test files
+pytest tests/test_camera.py -v        # Tests camera threading and frame distribution
+pytest tests/test_flask_routes.py -v  # Tests Flask routes and API endpoints
+
+# Run a specific test
+pytest tests/test_camera.py::TestBaseCamera::test_get_frame_returns_valid_jpeg -v
+```
+
+**What the unit tests verify:**
+- **test_camera.py**: Thread-safe frame distribution, multi-client synchronization, camera lifecycle
+  - `TestCameraEvent`: Event system for client synchronization
+  - `TestBaseCamera`: Background thread management, frame delivery
+  - `TestFrameGeneration`: Continuous frame updates, concurrent access safety
+
+- **test_flask_routes.py**: Web interface, API endpoints, error handling
+  - `TestRoutes`: Index page, video feed route, health check endpoint
+  - `TestStreamingBehavior`: Handling camera unavailability, concurrent requests
+  - `TestStaticAssets`: CSS and JavaScript file accessibility
+
+**Expected output:**
+```
+tests/test_camera.py::TestCameraEvent::test_event_creation PASSED
+tests/test_camera.py::TestBaseCamera::test_camera_starts_thread PASSED
+tests/test_camera.py::TestBaseCamera::test_get_frame_returns_valid_jpeg PASSED
+...
+==================== 15 passed in 3.52s ====================
+```
+
+#### 3. Manual Application Testing (On Pi with Real Camera)
+
+**Run the Flask application directly to test streaming:**
+
+```bash
+# SSH to Pi
+ssh meta@192.168.86.31
+
+# Navigate to project
+cd ~/camera-stream  # or wherever you cloned it
+
+# Install dependencies if not already installed
+pip install -r requirements.txt
+
+# Run the application in development mode
+python app.py
+```
+
+**Expected output:**
+```
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.86.31:5000
+Press CTRL+C to quit
+```
+
+**Test the endpoints:**
+
+```bash
+# From another terminal or browser:
+
+# 1. Test health check endpoint
+curl http://192.168.86.31:5000/health
+# Expected: {"status":"healthy","camera_available":true,"config":{...}}
+
+# 2. Test main page
+curl http://192.168.86.31:5000/
+# Expected: HTML with "Pi Camera Stream" or "Camera Stream"
+
+# 3. Test video feed (will stream MJPEG data)
+curl http://192.168.86.31:5000/video_feed --max-time 5
+# Expected: Multipart MJPEG data stream
+```
+
+**Test in browser:**
+1. Open browser to: `http://192.168.86.31:5000`
+2. You should see the web interface with live camera stream
+3. Check browser console for errors (F12)
+4. Verify stream loads within 2-3 seconds
+
+#### 4. Multi-Client Testing
+
+**Test that multiple viewers can watch simultaneously:**
+
+```bash
+# In browser: Open 5 tabs to http://192.168.86.31:5000
+# All tabs should show smooth video without stuttering
+
+# Monitor performance while streaming
+ssh meta@192.168.86.31
+
+# Terminal 1: Monitor CPU/memory
+htop
+# Look for python process, should be <50% CPU
+
+# Terminal 2: Monitor network bandwidth
+sudo iftop -i eth0
+# Should show ~3.5 Mbps per connected viewer
+
+# Terminal 3: Watch application logs
+# If running as systemd service:
+sudo journalctl -u camera-stream -f
+
+# If running manually, logs appear in the python app.py terminal
+```
+
+**Expected behavior:**
+- All 5 viewers see synchronized video (same frames)
+- No significant frame drops
+- Latency <300ms (wave hand in front of camera to test)
+- CPU usage <50%
+- No errors in logs
+
+#### 5. Testing Specific Features
+
+**Test camera thread lifecycle:**
+```bash
+# Run app, access stream, then close browser
+# Wait 10 seconds (FRAME_TIMEOUT)
+# Check logs - should see camera thread stopping due to inactivity
+# Refresh browser - camera thread should restart automatically
+```
+
+**Test error handling:**
+```bash
+# Test with camera disconnected
+# Physically disconnect camera cable while Pi is running
+python app.py
+
+# Expected: App starts but /video_feed returns 503 error
+# /health endpoint should show "camera_available": false
+```
+
+**Test configuration changes:**
+```bash
+# Test different resolutions
+export CAMERA_RESOLUTION=640,480
+export CAMERA_QUALITY=75
+python app.py
+# Verify lower latency but lower quality
+
+# Test high quality
+export CAMERA_RESOLUTION=1920,1080
+export CAMERA_QUALITY=90
+export CAMERA_FRAMERATE=24
+python app.py
+# Verify higher quality but slightly higher latency
+```
+
+#### 6. Integration Testing with Systemd Service
+
+**Test the production deployment:**
+
+```bash
+# Stop manual app if running (Ctrl+C)
+
+# Install/start service
+sudo systemctl start camera-stream
+sudo systemctl status camera-stream
+# Should show "active (running)"
+
+# Test endpoints
+curl http://192.168.86.31:5000/health
+
+# Test in browser
+# Open: http://192.168.86.31:5000
+
+# Test auto-restart on failure
+sudo systemctl restart camera-stream
+# Stream should recover within 5 seconds
+
+# Test boot persistence
+sudo systemctl enable camera-stream
+sudo reboot
+
+# After reboot, verify service auto-started
+sudo systemctl status camera-stream
+```
+
+#### 7. Troubleshooting Test Failures
+
+**Unit tests fail:**
+```bash
+# Check Python version
+python --version  # Should be 3.7+
+
+# Reinstall dependencies
+pip install -r requirements-dev.txt --force-reinstall
+
+# Run with more verbosity
+pytest tests/ -vv -s
+```
+
+**Camera not detected during manual test:**
+```bash
+# Verify camera configuration (see Camera Hardware Setup section)
+rpicam-hello --list-cameras
+sudo i2cdetect -y 10  # Should show "UU" at 0x36
+
+# Check logs
+dmesg | grep -iE 'ov5647|camera'
+```
+
+**Web interface shows "Camera not available":**
+```bash
+# Check picamera2 is installed
+pip show picamera2
+
+# If not installed:
+sudo apt-get install -y python3-picamera2
+
+# Or in virtualenv:
+pip install picamera2
+```
+
+**Stream is laggy or stuttering:**
+```bash
+# Check network
+ping 192.168.86.31  # Should be <10ms on local network
+
+# Check CPU usage
+htop  # Python process should be <50%
+
+# Reduce resolution temporarily
+export CAMERA_RESOLUTION=640,480
+python app.py
+
+# Check network bandwidth available
+iftop -i eth0
+```
+
+### Test Checklist
+
+Before deploying to production, verify:
+
+- [ ] Camera hardware test passes (`rpicam-hello --list-cameras`)
+- [ ] Test photo captured successfully (`rpicam-still`)
+- [ ] All unit tests pass (`pytest tests/ -v`)
+- [ ] Health endpoint returns healthy status
+- [ ] Single viewer stream works smoothly
+- [ ] 5 concurrent viewers work without issues
+- [ ] Latency <300ms (wave hand test)
+- [ ] CPU usage <50% with 5 viewers
+- [ ] Camera thread stops after 10s of inactivity
+- [ ] Camera thread restarts when viewer reconnects
+- [ ] Systemd service starts correctly
+- [ ] Service auto-starts on boot
+- [ ] Stream recovers from service restart
+
+### Performance Benchmarks (Expected Results)
+
+**Single Viewer @ 720p/30fps/85 quality:**
+- Latency: 150-200ms
+- CPU: 20-25%
+- Memory: 150-180MB
+- Network: 3-4 Mbps
+
+**5 Viewers @ 720p/30fps/85 quality:**
+- Latency: 150-250ms
+- CPU: 35-45%
+- Memory: 180-220MB
+- Network: 15-20 Mbps total (3-4 Mbps each)
+
+### Summary - Testing Phases
+
 **Local Testing (before Pi deployment):**
-1. Run unit tests: `pytest tests/`
+1. Run unit tests: `pytest tests/` (see Section 2 above)
 2. Test Flask routes with mock camera
 3. Verify MJPEG format correctness
 4. Check HTML/CSS rendering
 
 **Pi Testing:**
-1. Single viewer test - verify smooth stream
-2. Multi-viewer test - open 5 browser tabs simultaneously
-3. Latency test - wave hand in front of camera, measure delay
-4. Performance monitoring:
+1. Camera hardware test (see Section 1 above)
+2. Single viewer test - verify smooth stream
+3. Multi-viewer test - open 5 browser tabs simultaneously (see Section 4 above)
+4. Latency test - wave hand in front of camera, measure delay
+5. Performance monitoring:
    - CPU usage: `htop` (should be <50%)
    - Network: `iftop -i eth0`
    - Service logs: `journalctl -u camera-stream -f`
-5. Reconnection test - disconnect/reconnect network
-6. Long-running test - leave streaming for 24+ hours
+6. Reconnection test - disconnect/reconnect network
+7. Long-running test - leave streaming for 24+ hours
 
 **Success Criteria:**
 - ✓ Latency under 300ms
