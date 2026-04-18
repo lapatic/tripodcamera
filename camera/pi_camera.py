@@ -101,8 +101,30 @@ class PiCamera(BaseCamera):
         # Create streaming output buffer
         output = StreamingOutput()
 
-        # Create MJPEG encoder with specified quality
-        encoder = MJPEGEncoder(q=config.STREAM_CONFIG['quality'])
+        # Create MJPEG encoder
+        # Note: Newer picamera2 versions (0.3.34+) use bitrate instead of quality (q)
+        # If quality is configured, estimate bitrate; otherwise use default
+        quality = config.STREAM_CONFIG.get('quality', 85)
+
+        if quality:
+            # Rough bitrate estimation for MJPEG:
+            # 720p @ quality 85 ≈ 5 Mbps, 1080p @ quality 85 ≈ 8 Mbps
+            # Scale based on pixels and quality
+            resolution = config.STREAM_CONFIG['resolution']
+            pixels = resolution[0] * resolution[1]
+            framerate = config.STREAM_CONFIG['framerate']
+
+            # Base: 5 Mbps for 720p (921,600 px) at quality 85
+            reference_pixels = 1280 * 720
+            reference_quality = 85
+            reference_bitrate = 5_000_000
+
+            bitrate = int(reference_bitrate * (pixels / reference_pixels) *
+                         (quality / reference_quality) * (framerate / 30))
+        else:
+            bitrate = None  # Use encoder default
+
+        encoder = MJPEGEncoder(bitrate=bitrate)
 
         # Start camera with encoder
         picam2.start_recording(encoder, FileOutput(output))
